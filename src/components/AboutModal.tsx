@@ -70,6 +70,17 @@ export const AboutModal = () => {
               </ul>
             </div>
 
+            {/* ⭐ TEAM MEMBERS SECTION ⭐ */}
+            <div className="mt-8 space-y-3">
+              <h4 className="font-semibold text-foreground text-lg">Team Members</h4>
+              <ul className="space-y-2 text-sm">
+                <li>1. <span className="font-medium">Varun Pal</span> (Leader)</li>
+                <li>2. <span className="font-medium">Vansh Agarwal</span></li>
+                <li>3. <span className="font-medium">Vinit Singh Bora</span></li>
+                <li>4. <span className="font-medium">Shivansh Giri Goswami</span></li>
+              </ul>
+            </div>
+
             <div className="mt-6 p-4 bg-primary/10 rounded-lg">
               <h4 className="font-semibold text-foreground mb-2">How to Use:</h4>
               <ol className="text-sm space-y-1 list-decimal list-inside">

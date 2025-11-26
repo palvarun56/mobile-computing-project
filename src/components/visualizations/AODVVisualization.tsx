@@ -10,6 +10,83 @@ export const AODVVisualization = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // ⭐ STEP REASON DATA (Added)
+  const reasons = {
+    0: null,
+    1: {
+      node: "B",
+      text: [
+        "Selected B: lowest hop from A",
+        "Rejected C: longer distance"
+      ]
+    },
+    2: {
+      node: "D",
+      text: [
+        "Selected D: fastest RREP",
+        "Rejected E: higher delay"
+      ]
+    },
+    3: {
+      node: "F",
+      text: [
+        "Final destination reached"
+      ]
+    }
+  };
+
+  // ⭐ CLOUD BUBBLE (Added)
+  const CloudBubble = ({ x, y, lines }) => {
+  // Split long lines into multiple shorter lines (wrapping)
+  const wrapped = lines.flatMap((line) => {
+    if (line.length <= 25) return [line];
+    const words = line.split(" ");
+    const rows = [];
+    let current = "";
+
+    words.forEach((w) => {
+      if ((current + " " + w).length <= 25) {
+        current += (current ? " " : "") + w;
+      } else {
+        rows.push(current);
+        current = w;
+      }
+    });
+    rows.push(current);
+    return rows;
+  });
+
+  const width = 160; // Bubble width auto enough for wrapped lines
+  const height = wrapped.length * 16 + 12;
+
+  return (
+    <g transform={`translate(${x - width / 2}, ${y - 90})`}>
+      <rect
+        width={width}
+        height={height}
+        rx="14"
+        fill="white"
+        stroke="hsl(var(--primary))"
+        strokeWidth="1.5"
+      />
+
+      {wrapped.map((t, i) => (
+        <text
+          key={i}
+          x={width / 2}
+          y={20 + i * 16}
+          textAnchor="middle"
+          fontSize="10"
+          fill="black"
+          fontWeight="600"
+        >
+          {t}
+        </text>
+      ))}
+    </g>
+  );
+};
+
   const nodes = [
     { id: "A", x: 100, y: 200, label: "Source A" },
     { id: "B", x: 250, y: 150, label: "Node B" },
@@ -22,6 +99,14 @@ export const AODVVisualization = () => {
   return (
     <div className="w-full h-full min-h-[400px] flex flex-col items-center justify-center p-8">
       <svg viewBox="0 0 700 400" className="w-full max-w-4xl">
+
+        {/* ⭐ CLOUD BUBBLE RENDER (Added) */}
+        {step > 0 && reasons[step] && (() => {
+          const r = reasons[step];
+          const node = nodes.find((n) => n.id === r.node);
+          return <CloudBubble x={node.x} y={node.y} lines={r.text} />;
+        })()}
+
         {/* Connections */}
         <g stroke="hsl(var(--border))" strokeWidth="2" opacity="0.3">
           <line x1="100" y1="200" x2="250" y2="150" />
@@ -109,20 +194,24 @@ export const AODVVisualization = () => {
       <div className="mt-8 max-w-2xl text-center space-y-4">
         <h3 className="text-xl font-semibold gradient-text">AODV Protocol (Ad Hoc On-Demand Distance Vector)</h3>
         <p className="text-muted-foreground text-sm leading-relaxed">
-          AODV is a reactive routing protocol for mobile ad hoc networks. It discovers routes on-demand 
-          using <span className="text-accent font-medium">Route Request (RREQ)</span> broadcasts and 
-          <span className="text-primary font-medium"> Route Reply (RREP)</span> messages.
+          AODV discovers routes on-demand using 
+          <span className="text-accent font-medium"> RREQ</span> and 
+          <span className="text-primary font-medium"> RREP</span>.
         </p>
+
         <div className="grid grid-cols-4 gap-2 mt-6 text-xs">
           <div className={`p-2 rounded-lg transition-all ${step === 0 ? "bg-accent/20 border-2 border-accent" : "bg-muted"}`}>
             <div className="font-semibold">1. RREQ Broadcast</div>
           </div>
+
           <div className={`p-2 rounded-lg transition-all ${step === 1 ? "bg-accent/20 border-2 border-accent" : "bg-muted"}`}>
             <div className="font-semibold">2. Route Discovery</div>
           </div>
+
           <div className={`p-2 rounded-lg transition-all ${step === 2 ? "bg-primary/20 border-2 border-primary" : "bg-muted"}`}>
             <div className="font-semibold">3. RREP Reply</div>
           </div>
+
           <div className={`p-2 rounded-lg transition-all ${step === 3 ? "bg-tech-teal/20 border-2 border-tech-teal" : "bg-muted"}`}>
             <div className="font-semibold">4. Data Transfer</div>
           </div>
