@@ -1,222 +1,260 @@
 import { useEffect, useState } from "react";
 
-export const AODVVisualization = () => {
-  const [step, setStep] = useState(0);
+// ----------------------------------------------------------
+// SAFER 2-HOP GREEDY (Always moves forward, guaranteed reach)
+// ----------------------------------------------------------
+function findGreedyPath(nodes, source, destination) {
+  const indexMap = Object.fromEntries(nodes.map((n, i) => [n.id, i]));
+  const path = [source];
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setStep((prev) => (prev + 1) % 4);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
+  let current = source;
+  let safety = 0;
 
-  // ⭐ STEP REASON DATA (Added)
-  const reasons = {
-    0: null,
-    1: {
-      node: "B",
-      text: [
-        "Selected B: lowest hop from A",
-        "Rejected C: longer distance"
-      ]
-    },
-    2: {
-      node: "D",
-      text: [
-        "Selected D: fastest RREP",
-        "Rejected E: higher delay"
-      ]
-    },
-    3: {
-      node: "F",
-      text: [
-        "Final destination reached"
-      ]
+  while (current !== destination) {
+    safety++;
+    if (safety > nodes.length + 5) break;
+
+    const idx = indexMap[current];
+
+    // ensure only forward progress
+    const next1 = nodes[idx + 1];
+    const next2 = nodes[idx + 2];
+
+    const choices = [];
+
+    if (next1) choices.push(next1);
+    if (next2) choices.push(next2);
+
+    // if no forward nodes, stop
+    if (choices.length === 0) break;
+
+    // if destination is ahead, force include it
+    if (indexMap[destination] > idx) {
+      const destIndex = indexMap[destination];
+
+      // if destination is exactly next1 or next2
+      if (destIndex === idx + 1) {
+        path.push(destination);
+        break;
+      }
+      if (destIndex === idx + 2) {
+        path.push(next2.id);
+        current = next2.id;
+        if (current === destination) break;
+        continue;
+      }
     }
+
+    // pick best of next 2
+    choices.sort((a, b) => a.delay - b.delay);
+    const chosen = choices[0];
+
+    current = chosen.id;
+    path.push(current);
+
+    if (current === destination) break;
+  }
+
+  return path;
+}
+
+// ----------------------------------------------------------
+// MAIN COMPONENT
+// ----------------------------------------------------------
+export const AODVVisualization = () => {
+  const [configured, setConfigured] = useState(false);
+  const [nodeCount, setNodeCount] = useState(2);
+  const [nodesData, setNodesData] = useState([]);
+  const [source, setSource] = useState("");
+  const [destination, setDestination] = useState("");
+
+  const [step, setStep] = useState(0);
+  const [finalPath, setFinalPath] = useState([]);
+  const [dynamicNodes, setDynamicNodes] = useState([]);
+  const [pathLinks, setPathLinks] = useState([]);
+
+  // ----------------------------------------------------------
+  // START
+  // ----------------------------------------------------------
+  const handleStart = () => {
+    if (!source || !destination)
+      return alert("Please select source & destination!");
+
+    if (nodesData.length > 6)
+      return alert("Maximum 6 nodes allowed!");
+
+    // Place nodes randomly in 3 rows
+    const rows = [150, 260, 360];
+    const placed = nodesData.map((n, i) => ({
+      ...n,
+      x: 150 + i * 180,
+      y: rows[Math.floor(Math.random() * rows.length)],
+    }));
+    setDynamicNodes(placed);
+
+    // compute path
+    const path = findGreedyPath(placed, source, destination);
+    setFinalPath(path);
+
+    // build links
+    const links = [];
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = placed.find(n => n.id === path[i]);
+      const b = placed.find(n => n.id === path[i + 1]);
+      if (a && b) links.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+    }
+    setPathLinks(links);
+
+    setConfigured(true);
   };
 
-  // ⭐ CLOUD BUBBLE (Added)
-  const CloudBubble = ({ x, y, lines }) => {
-  // Split long lines into multiple shorter lines (wrapping)
-  const wrapped = lines.flatMap((line) => {
-    if (line.length <= 25) return [line];
-    const words = line.split(" ");
-    const rows = [];
-    let current = "";
+  // ----------------------------------------------------------
+  // ANIMATION
+  // ----------------------------------------------------------
+  useEffect(() => {
+    if (!configured) return;
+    const t = setInterval(() => setStep(s => (s + 1) % 3), 2000);
+    return () => clearInterval(t);
+  }, [configured]);
 
-    words.forEach((w) => {
-      if ((current + " " + w).length <= 25) {
-        current += (current ? " " : "") + w;
-      } else {
-        rows.push(current);
-        current = w;
-      }
-    });
-    rows.push(current);
-    return rows;
-  });
-
-  const width = 160; // Bubble width auto enough for wrapped lines
-  const height = wrapped.length * 16 + 12;
-
-  return (
-    <g transform={`translate(${x - width / 2}, ${y - 90})`}>
-      <rect
-        width={width}
-        height={height}
-        rx="14"
-        fill="white"
-        stroke="hsl(var(--primary))"
-        strokeWidth="1.5"
-      />
-
-      {wrapped.map((t, i) => (
-        <text
-          key={i}
-          x={width / 2}
-          y={20 + i * 16}
-          textAnchor="middle"
-          fontSize="10"
-          fill="black"
-          fontWeight="600"
-        >
+  const CloudBubble = ({ x, y, lines }) => (
+    <g transform={`translate(${x - 110}, ${y - 140})`}>
+      <rect width={220} height={lines.length * 18 + 30} rx="12" fill="white" stroke="blue" />
+      {lines.map((t, i) => (
+        <text key={i} x={110} y={25 + i * 16} fontSize="11" fontWeight="600" textAnchor="middle">
           {t}
         </text>
       ))}
     </g>
   );
-};
 
-  const nodes = [
-    { id: "A", x: 100, y: 200, label: "Source A" },
-    { id: "B", x: 250, y: 150, label: "Node B" },
-    { id: "C", x: 250, y: 250, label: "Node C" },
-    { id: "D", x: 400, y: 150, label: "Node D" },
-    { id: "E", x: 400, y: 250, label: "Node E" },
-    { id: "F", x: 550, y: 200, label: "Dest F" },
-  ];
+  const reasons = {
+    1: { node: finalPath[1], text: ["Checking next nodes", "Comparing delays"] },
+    2: { node: finalPath[finalPath.length - 1], text: ["Destination reached", "Path complete"] },
+  };
 
+  // ----------------------------------------------------------
+  // CONFIG SCREEN
+  // ----------------------------------------------------------
+  if (!configured) {
+    return (
+      <div className="p-6 space-y-4 max-w-xl mx-auto">
+        <h2 className="text-xl font-bold text-center">Setup Your Network</h2>
+
+        <input
+          type="number"
+          min="2"
+          max="6"
+          value={nodeCount}
+          onChange={(e) => {
+            let v = Number(e.target.value);
+            if (v > 6) { alert("Max 6 nodes"); v = 6; }
+            setNodeCount(v);
+          }}
+          className="w-full p-2 border rounded"
+        />
+
+        {[...Array(nodeCount)].map((_, i) => (
+          <div key={i} className="flex gap-3">
+            <input
+              placeholder="Node ID"
+              className="p-2 border rounded w-1/2"
+              onChange={(e) => {
+                const arr = [...nodesData];
+                arr[i] = { ...arr[i], id: e.target.value.toUpperCase() };
+                setNodesData(arr.slice(0, 6));
+              }}
+            />
+            <input
+              placeholder="Delay (ms)"
+              className="p-2 border rounded w-1/2"
+              type="number"
+              onChange={(e) => {
+                const arr = [...nodesData];
+                arr[i] = { ...arr[i], delay: Number(e.target.value) };
+                setNodesData(arr.slice(0, 6));
+              }}
+            />
+          </div>
+        ))}
+
+        <select className="p-2 border rounded w-full" onChange={e => setSource(e.target.value)}>
+          <option>Select Source</option>
+          {nodesData.map((n, i) => <option key={i}>{n.id}</option>)}
+        </select>
+
+        <select className="p-2 border rounded w-full" onChange={e => setDestination(e.target.value)}>
+          <option>Select Destination</option>
+          {nodesData.map((n, i) => <option key={i}>{n.id}</option>)}
+        </select>
+
+        <button className="w-full p-3 bg-blue-600 text-white rounded" onClick={handleStart}>
+          Start Visualization
+        </button>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------------
+  // VISUALIZATION
+  // ----------------------------------------------------------
   return (
-    <div className="w-full h-full min-h-[400px] flex flex-col items-center justify-center p-8">
-      <svg viewBox="0 0 700 400" className="w-full max-w-4xl">
+    <div className="w-full p-10 flex flex-col items-center">
+      <svg viewBox="0 0 1800 500" className="w-full max-w-7xl">
 
-        {/* ⭐ CLOUD BUBBLE RENDER (Added) */}
-        {step > 0 && reasons[step] && (() => {
-          const r = reasons[step];
-          const node = nodes.find((n) => n.id === r.node);
-          return <CloudBubble x={node.x} y={node.y} lines={r.text} />;
-        })()}
+        {step > 0 && reasons[step] &&
+          (() => {
+            const r = reasons[step];
+            const obj = dynamicNodes.find(n => n.id === r.node);
+            return obj ? <CloudBubble x={obj.x} y={obj.y} lines={r.text} /> : null;
+          })()
+        }
 
-        {/* Connections */}
-        <g stroke="hsl(var(--border))" strokeWidth="2" opacity="0.3">
-          <line x1="100" y1="200" x2="250" y2="150" />
-          <line x1="100" y1="200" x2="250" y2="250" />
-          <line x1="250" y1="150" x2="400" y2="150" />
-          <line x1="250" y1="150" x2="250" y2="250" />
-          <line x1="250" y1="250" x2="400" y2="250" />
-          <line x1="400" y1="150" x2="550" y2="200" />
-          <line x1="400" y1="250" x2="550" y2="200" />
-          <line x1="400" y1="150" x2="400" y2="250" />
+        {/* Path lines */}
+        <g stroke="blue" strokeWidth="4">
+          {pathLinks.map((l, i) => (
+            <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} />
+          ))}
         </g>
 
-        {/* Active Path */}
-        {step >= 2 && (
-          <g stroke="hsl(var(--primary))" strokeWidth="3" className="animate-pulse">
-            <line x1="100" y1="200" x2="250" y2="150" />
-            <line x1="250" y1="150" x2="400" y2="150" />
-            <line x1="400" y1="150" x2="550" y2="200" />
-          </g>
-        )}
-
-        {/* RREQ Broadcast */}
-        {step === 0 && (
-          <g className="animate-pulse-slow">
-            <circle cx="100" cy="200" r="40" fill="hsl(var(--accent))" opacity="0.2" />
-            <circle cx="100" cy="200" r="60" fill="hsl(var(--accent))" opacity="0.1" />
-          </g>
-        )}
-
-        {step === 1 && (
-          <g className="animate-pulse-slow">
-            <circle cx="250" cy="150" r="40" fill="hsl(var(--accent))" opacity="0.2" />
-            <circle cx="250" cy="250" r="40" fill="hsl(var(--accent))" opacity="0.2" />
-          </g>
-        )}
-
-        {/* Data Packet */}
-        {step === 3 && (
-          <circle 
-            cx="275" 
-            cy="175" 
-            r="8" 
-            fill="hsl(var(--tech-teal))" 
-            className="animate-pulse"
-          />
-        )}
-
         {/* Nodes */}
-        {nodes.map((node) => (
+        {dynamicNodes.map(node => (
           <g key={node.id}>
+            <text
+              x={node.x}
+              y={node.y - 28}
+              fontSize="11"
+              fontWeight="700"
+              textAnchor="middle"
+            >
+              {finalPath.includes(node.id) ? "Selected" : "Rejected"}
+            </text>
+
             <circle
               cx={node.x}
               cy={node.y}
-              r="20"
+              r={26}
               fill={
-                node.id === "A" ? "hsl(var(--primary))" :
-                node.id === "F" ? "hsl(var(--accent))" :
-                "hsl(var(--tech-cyan))"
+                node.id === source
+                  ? "blue"
+                  : node.id === destination
+                  ? "green"
+                  : finalPath.includes(node.id)
+                  ? "#00bcd4"
+                  : "#b0bec5"
               }
-              className={step >= 1 && (node.id === "B" || node.id === "C" || node.id === "D") ? "animate-pulse" : ""}
             />
-            <text
-              x={node.x}
-              y={node.y + 5}
-              textAnchor="middle"
-              fill="white"
-              fontSize="14"
-              fontWeight="600"
-            >
+
+            <text x={node.x} y={node.y + 4} fontSize="13" fill="white" fontWeight="700" textAnchor="middle">
               {node.id}
             </text>
-            <text
-              x={node.x}
-              y={node.y + 40}
-              textAnchor="middle"
-              fill="hsl(var(--foreground))"
-              fontSize="10"
-            >
-              {node.label}
+
+            <text x={node.x} y={node.y + 34} fontSize="10" textAnchor="middle">
+              {node.delay} ms
             </text>
           </g>
         ))}
       </svg>
-
-      <div className="mt-8 max-w-2xl text-center space-y-4">
-        <h3 className="text-xl font-semibold gradient-text">AODV Protocol (Ad Hoc On-Demand Distance Vector)</h3>
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          AODV discovers routes on-demand using 
-          <span className="text-accent font-medium"> RREQ</span> and 
-          <span className="text-primary font-medium"> RREP</span>.
-        </p>
-
-        <div className="grid grid-cols-4 gap-2 mt-6 text-xs">
-          <div className={`p-2 rounded-lg transition-all ${step === 0 ? "bg-accent/20 border-2 border-accent" : "bg-muted"}`}>
-            <div className="font-semibold">1. RREQ Broadcast</div>
-          </div>
-
-          <div className={`p-2 rounded-lg transition-all ${step === 1 ? "bg-accent/20 border-2 border-accent" : "bg-muted"}`}>
-            <div className="font-semibold">2. Route Discovery</div>
-          </div>
-
-          <div className={`p-2 rounded-lg transition-all ${step === 2 ? "bg-primary/20 border-2 border-primary" : "bg-muted"}`}>
-            <div className="font-semibold">3. RREP Reply</div>
-          </div>
-
-          <div className={`p-2 rounded-lg transition-all ${step === 3 ? "bg-tech-teal/20 border-2 border-tech-teal" : "bg-muted"}`}>
-            <div className="font-semibold">4. Data Transfer</div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
